@@ -162,33 +162,7 @@ def mix_test(start_rate1, final_rate1, start_rate2, final_rate2, steps_total, st
         time.sleep((step_time)-(delay_time))
         logger("")
         step = step + 1 
-    # logger("drop test") # drop test with syringe P1 starting at 50 ul/min (set from 0 ul/min at start) and changed stepwise to 500 ul/min over 10 steps for 3 minutes each while P2 syringe undergoes vice versa
-    # step = 0
-    # while step != steps_total-1:
-    #     logger("step " + str(step))
-    #     logger(str(datetime.datetime.now()))
-    #     p1rate = ((p1droplist[step]))
-    #     p2rate = ((p2droplist[step]))
-    #     if p1rate == str(0) or p1rate == str(0.0): # Can't send IRUN command at 0 ul/min as its below the minimum flow rate
-    #         solo_run = "SL="+rate_calc(p2rate)
-    #         logger(solo_run)
-    #         logger("pump 1: " + str(p1rate) + " and " +"pump 2:" + str(p2rate))
-    #         direct2(solo_run)
-    #         time.sleep(step_time)
-    #         direct2("SL=0")
-    #     elif p2rate == str(0) or p2rate == str(0.0):
-    #         solo_run = "SL="+rate_calc(p1rate)
-    #         logger(solo_run)
-    #         logger("pump 1: " + str(p1rate) + " and " +"pump 2:" + str(p2rate))
-    #         direct1(solo_run)
-    #         time.sleep(step_time)
-    #         direct1("SL=0")
-    #     else:
-    #         run_rate(p1rate, p2rate)
-    #         time.sleep(step_time)
-    #         direct1("SL=0")
-    #         direct2("SL=0")
-    #     step = step + 1 
+
 direct1("EM=1") # setting pumps to half-duplex
 direct2("EM=1")
 direct3("EM=1")
