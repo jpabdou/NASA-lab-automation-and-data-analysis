@@ -55,7 +55,7 @@ def expt_run(params, folder_path, volume):
         P_init_range = [params["P_start"] + params["P_delay"] + params["P_offset"], params["P_start"] + params["P_delay"]+add_delay]
     else:
         expt_type = "fill"
-        check_params("fill_transducer_range")
+        check_params("supply_transducer_range")
         P_init_range = [params["P_start"] - params["P_delay"]-add_delay, params["P_start"] - params["P_delay"]-params["P_offset"]]
 
         
@@ -74,7 +74,7 @@ def expt_run(params, folder_path, volume):
             # conversion formula to calculate pressure (psig) from pressure transducer voltage (V)
             # NOTE: BE SURE TO CHANGE THIS FORMULA IF USING A DIFFERENT TRANSDUCER
             transducer_conversion_factor_1= params["tank_transducer_range"] *7.5/30
-            transducer_conversion_factor_2= params["fill_transducer_range"] *7.5/30
+            transducer_conversion_factor_2= params["supply_transducer_range"] *7.5/30
             result = (value*transducer_conversion_factor_1)-transducer_conversion_factor_1
             result2 = (value2*transducer_conversion_factor_2)-transducer_conversion_factor_2
             log_item = [result, result2,temperature, temperature2]
@@ -127,7 +127,7 @@ def expt_run(params, folder_path, volume):
     while count < params["count"]:
         start_sequence = (datetime.datetime.now())
         if expt_type == "fill":
-            timelog = [["current date/time","time (s)", "tank pressure (psig)", "upstream pressure (psig)","tank temperature (K)", "FDMG cross external temperature (K)"]]
+            timelog = [["current date/time","time (s)", "tank pressure (psig)", "supply pressure (psig)","tank temperature (K)", "FDMG cross external temperature (K)"]]
         else:
             timelog = [["current date/time,time (s)","tank pressure (psig)","tank temperature (K)","FDMG cross internal temperature (K)"]]
         value = pressure_temperature_measurement_logging("pre",start_sequence,timelog, expt_type)
@@ -151,6 +151,7 @@ def expt_run(params, folder_path, volume):
                 time.sleep(sleep_time)
             value = pressure_temperature_measurement_logging("pre", start_sequence ,timelog, expt_type)
 
+        # print(f"reached target psig of {value} and equilibrating for {pre} seconds")
         air_function(air_off)
         time.sleep(params["pre"])
 
@@ -188,6 +189,7 @@ def expt_run(params, folder_path, volume):
                     if result_end[1] == "time (s)":
                         result_end = timelog[-1] # conditional for if the result_end is recorded for the first measurement because the experiment began at below params["P_start"], which causes the timelog header in line 99 to be accidentally used for result_end. Sets result_end to be the first data recording in that case.        
                     print(f"End point of {result_end[2]} psig reached at {result_end[1]} sec")
+        # result_end = timelog[-2] # sets result_end to the first instance of time where params["P_end"] (or the first pressure past params["P_end"]) is measured
         
         # run_result = [str(volume)] + result_start[:-1] + result_end[:-1] + [str(float(result_end[0]) - float(result_start[0]))] # concatenates volume of the experiment and the time and pressure results of results_start and result_end and pressure change time (the difference between time end and start)
         # NOTE: THE UNPACK OPERATOR "*" ONLY WORKS ON PYTHON 3.6+. IF ON A PYTHON VERSION BELOW 3.6, COMMENT THIS OUT AND UNCOMMENT LINE ABOVE
@@ -206,7 +208,28 @@ def expt_run(params, folder_path, volume):
                 csv_file.write(",".join(line) + "\n")
         
         count +=1
+        # print(f"begin equilibration period of {post} seconds")
         if not count == params["count"]:
             time.sleep(params["post"])
 
+
+    # # real-time analysis printed in console to show to visitors, if necessary 
+    # print display of 1 run to show system functioning to visitor
+    # print("start time (s):")
+    # print(round(float(results[0][1]),2))
+    # print("start pressure (psig):")
+    # print(round(float(results[0][2]),2))
+    # print("end time (s):")
+    # print(round(float(results[0][3]),2))
+    # print("end pressure (psig):")
+    # print(round(float(results[0][4]),2))
+    # print("pressure change time or end time - start time (s):")
+    # print(round(float(results[0][5]),2))
+    # print("calculated volume (L):")
+    # print(round(float(results[0][6]),2))
+    # print("absolute error or absolute value of calculated volume - volume (L):")
+    # print(round(float(results[0][7]),2))
+    # print("calibration curve used to convert pressure change time to calculated volume:")
+    # print("calculated volume = (pressure change time*-0.34311) + 73.89513")
     return(results)
+

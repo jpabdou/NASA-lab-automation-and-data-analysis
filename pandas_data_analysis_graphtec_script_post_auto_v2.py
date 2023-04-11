@@ -7,6 +7,7 @@ import datetime
 import re
 from scipy import stats
 import json
+import matplotlib.pyplot as plt
 
 
 def graphtec_analysis(path, dir, experiment_list, dictionary):
@@ -66,8 +67,9 @@ def graphtec_analysis(path, dir, experiment_list, dictionary):
         csv_volumes = []
 
         if expt_type == "fill":
-            av_upstream_pressures = []
-            sd_upstream_pressures = []
+            av_supply_pressures = []
+            sd_supply_pressures = []
+            range_supply_pressures= []
 
 
         for volume_section in listings:
@@ -80,8 +82,9 @@ def graphtec_analysis(path, dir, experiment_list, dictionary):
             
 
             if expt_type == "fill":
-                average_upstream_pressure_point = []
-                sd_upstream_pressure_point = []
+                average_supply_pressure_point = []
+                sd_supply_pressure_point = []
+                range_supply_pressure_point = []
             
             def file_search_regex(regex, path):
                 result = []
@@ -93,6 +96,7 @@ def graphtec_analysis(path, dir, experiment_list, dictionary):
             
             # regex matches the YYMMDD-HHMMSS format of the Graphtec file
             file = file_search_regex("^\d{6}-\d{6}", parent_path)
+            # print(file)
             if len(file) == 0:
                 raise Exception("Graphtec file not found. Please check the root of the experiment subdirectory for a raw data file matching 'YYMMDD-HHMMSS.csv' format and transfer the data file to this subdirectory from the Graphtec SD card, if necessary")                
             file = file[0]
@@ -111,6 +115,10 @@ def graphtec_analysis(path, dir, experiment_list, dictionary):
                 data['Number']=data['Number'].apply(lambda x: x*0.2)
                 data['Number']=data['Number']-data['Number'].iloc[0]
             
+                # # channel 1 not in use; uncomment, if necessary
+                # data['CH1'] = data['CH1'].apply(lambda x: x[1:])
+                # data['CH1'] = data['CH1'].astype(float)
+                
                 data['CH2'] = data['CH2'].apply(lambda x: x[1:])
                 data['CH2'] = data['CH2'].astype(float)
 
@@ -161,8 +169,9 @@ def graphtec_analysis(path, dir, experiment_list, dictionary):
                 
                 if expt_type == "fill":
                     data = data[(data["CH2"] >= start_pressure) & (data["CH2"] <= end_pressure)]
-                    average_upstream_pressure_point.append(rounding(data["CH3"].mean()))
-                    sd_upstream_pressure_point.append(rounding(data["CH3"].std()))
+                    average_supply_pressure_point.append(rounding(data["CH3"].mean()))
+                    sd_supply_pressure_point.append(rounding(data["CH3"].std()))
+                    range_supply_pressure_point.append(rounding(data["CH3"].max())-rounding(data["CH3"].min()))
 
 
             start_results.append(start_time_block)
@@ -183,12 +192,14 @@ def graphtec_analysis(path, dir, experiment_list, dictionary):
             csv_volumes.append([expt_info[3]]+np.repeat("",expt["count"]-1).tolist())
             
             if expt_type == "fill":
-                av_upstream_pressures.append(average_upstream_pressure_point)
-                sd_upstream_pressures.append(sd_upstream_pressure_point)
+                av_supply_pressures.append(average_supply_pressure_point)
+                sd_supply_pressures.append(sd_supply_pressure_point)
+                range_supply_pressures.append(range_supply_pressure_point)
 
         time_array = np.array(average_pressure_change_times, dtype=np.float64)
         vol_array = np.array(volumes, dtype=np.float64)
         time_volume_calibration = stats.linregress(time_array, vol_array)
+        # time_volume_calibration_linear_fit_string = f"{str(round(time_volume_calibration.slope,4))}*x +  {str(round(time_volume_calibration.intercept,4))}"
         def calculated_volume(xval):
             return(time_volume_calibration.slope*xval + time_volume_calibration.intercept)
         calc_volumes = [(calculated_volume(x[1])) for x in collected_volume_time_results]
@@ -196,22 +207,26 @@ def graphtec_analysis(path, dir, experiment_list, dictionary):
         abs_errors_squared = [(x**2) for x in abs_errors]
 
         csv_standard_deviation_volumes = []
+        plot_standard_deviation_volumes = []
         for block in csv_standard_deviation_pressure_change_times:
             volume_block = []
             for sd in block:
                 if sd == '':
                     volume_block.append(sd)
                 else:
+                    plot_standard_deviation_volumes.append(sd*-time_volume_calibration.slope)
                     volume_block.append(rounding(sd*-time_volume_calibration.slope))
             csv_standard_deviation_volumes.append(volume_block)
 
         local_rmsds = []
         local_rmsds_block = []
+        local_rmsds_for_plot = []
         summation = 0
         for val_index,val in enumerate(abs_errors_squared,1):
             if (val_index % expt["count"]== 0):
                 summation += val
                 local_rmsds_block.insert(0, rounding((summation/(expt["count"]-1))**0.5))
+                local_rmsds_for_plot.append(rounding((summation/(expt["count"]-1))**0.5))
                 local_rmsds.append(local_rmsds_block)
                 local_rmsds_block = []
                 summation=0
@@ -219,25 +234,26 @@ def graphtec_analysis(path, dir, experiment_list, dictionary):
                 local_rmsds_block.append("")
                 summation += val
 
-        global_rmsd = [rounding((sum(abs_errors_squared)/(len(abs_errors_squared)-1))**0.5)] +np.repeat("",len(abs_errors_squared)-1).tolist()
+        global_rmsd_value = rounding((sum(abs_errors_squared)/(len(abs_errors_squared)-1))**0.5)
+        global_rmsd = [global_rmsd_value] +np.repeat("",len(abs_errors_squared)-1).tolist()
         slope = [rounding(time_volume_calibration.slope)] +np.repeat("",len(abs_errors_squared)-1).tolist()
         intercept = [rounding(time_volume_calibration.intercept)] +np.repeat("",len(abs_errors_squared)-1).tolist()
 
 
         df_list = []
         if expt_type == "vent":
-            units_dataframe = {"files": ["name"],"tank fill volume": ["L"], "P_start": ["psig"], "P_end": ["psig"], "start time": ["s"], "end time": ["s"], "pressure change time": ["s"], "volume": ["L"], "average pressure change time": ["s"], "std. dev. change time": ["s"], "std. dev. volume" : ["L"], "calculated volume": ["L"], "absolute error": ["L"], "absolute error^2": ["L^2"], "Tank Fill Volume": ["L"], "local RMSD": ["L"], "global RMSD": ["L"], "slope": ["L/s"], "intercept": ["L"]}
+            units_dataframe = {"files": ["name"],"tank fill volume": ["L"], "ullage volume": ["L"], "P_start": ["psig"], "P_end": ["psig"], "start time": ["s"], "end time": ["s"], "pressure change time": ["s"], "volume": ["L"], "average pressure change time": ["s"], "std. dev. change time": ["s"], "std. dev. volume" : ["L"], "calculated volume": ["L"], "absolute error": ["L"], "absolute error^2": ["L^2"], "Tank Fill Volume": ["L"], "local RMSD": ["L"], "global RMSD": ["L"], "slope": ["L/s"], "intercept": ["L"]}
         else:
-            units_dataframe = {"files": ["name"],"tank fill volume": ["L"], "P_start": ["psig"], "P_end": ["psig"], "ave. upstream pressure": ["psig"], "st. dev. upstream pressure": ["psig"],"start time": ["s"], "end time": ["s"], "pressure change time": ["s"], "volume": ["L"], "average pressure change time": ["s"], "std. dev. change time": ["s"], "std. dev. volume" : ["L"], "calculated volume": ["L"], "absolute error": ["L"], "absolute error^2": ["L^2"], "Tank Fill Volume": ["L"], "local RMSD": ["L"], "global RMSD": ["L"], "slope": ["L/s"], "intercept": ["L"]}
+            units_dataframe = {"files": ["name"],"tank fill volume": ["L"], "ullage volume": ["L"], "P_start": ["psig"], "P_end": ["psig"], "ave. supply pressure": ["psig"], "st. dev. supply pressure": ["psig"], "range supply pressure": ["psig"], "start time": ["s"], "end time": ["s"], "pressure change time": ["s"], "volume": ["L"], "average pressure change time": ["s"], "std. dev. change time": ["s"], "std. dev. volume" : ["L"], "calculated volume": ["L"], "absolute error": ["L"], "absolute error^2": ["L^2"], "Tank Fill Volume": ["L"], "local RMSD": ["L"], "global RMSD": ["L"], "slope": ["L/s"], "intercept": ["L"]}
         
         total_index = 0
         df_list.append(pd.DataFrame(data=units_dataframe))
         for index, volume_section in enumerate(listings,0):
             for idx, expt_info in enumerate(volume_section, 0):
                 if expt_type == "vent":
-                    inputs = {"files": expt_info[2], "tank fill volume": expt_info[3], "P_start": start_pressures[index][idx], "P_end": end_pressures[index][idx], "start time": start_results[index][idx], "end time": end_results[index][idx], "pressure change time": pressure_change_times[index][idx], "volume": expt_info[3],"calculated volume": calc_volumes[total_index], "absolute error": abs_errors[total_index], "absolute error^2": abs_errors_squared[total_index],  "average pressure change time": csv_average_pressure_change_times[index][idx], "std. dev. change time": csv_standard_deviation_pressure_change_times[index][idx], "std. dev. volume" : csv_standard_deviation_volumes[index][idx], "Tank Fill Volume": expt_info[3],"local RMSD": local_rmsds[index][idx], "global RMSD": global_rmsd[total_index], "slope": slope[total_index], "intercept": intercept[total_index]}
+                    inputs = {"files": expt_info[2], "tank fill volume": expt_info[3], "ullage volume": 73.5-expt_info[3], "P_start": start_pressures[index][idx], "P_end": end_pressures[index][idx], "start time": start_results[index][idx], "end time": end_results[index][idx], "pressure change time": pressure_change_times[index][idx], "volume": expt_info[3],"calculated volume": calc_volumes[total_index], "absolute error": abs_errors[total_index], "absolute error^2": abs_errors_squared[total_index],  "average pressure change time": csv_average_pressure_change_times[index][idx], "std. dev. change time": csv_standard_deviation_pressure_change_times[index][idx], "std. dev. volume" : csv_standard_deviation_volumes[index][idx], "Tank Fill Volume": expt_info[3],"local RMSD": local_rmsds[index][idx], "global RMSD": global_rmsd[total_index], "slope": slope[total_index], "intercept": intercept[total_index]}
                 else:
-                    inputs = {"files": expt_info[2], "tank fill volume": expt_info[3], "P_start": start_pressures[index][idx], "P_end": end_pressures[index][idx], "ave. upstream pressure": av_upstream_pressures[index][idx], "st. dev. upstream pressure": sd_upstream_pressures[index][idx],"start time": start_results[index][idx], "end time": end_results[index][idx], "pressure change time": pressure_change_times[index][idx], "volume": expt_info[3], "calculated volume": calc_volumes[total_index], "absolute error": abs_errors[total_index], "absolute error^2": abs_errors_squared[total_index],  "average pressure change time": csv_average_pressure_change_times[index][idx], "std. dev. change time": csv_standard_deviation_pressure_change_times[index][idx], "std. dev. volume" : csv_standard_deviation_volumes[index][idx], "Tank Fill Volume": expt_info[3], "local RMSD": local_rmsds[index][idx], "global RMSD": global_rmsd[total_index], "slope": slope[total_index], "intercept": intercept[total_index]}
+                    inputs = {"files": expt_info[2], "tank fill volume": expt_info[3], "ullage volume": 73.5-expt_info[3], "P_start": start_pressures[index][idx], "P_end": end_pressures[index][idx], "ave. supply pressure": av_supply_pressures[index][idx], "st. dev. supply pressure": sd_supply_pressures[index][idx], "range supply pressure": range_supply_pressures[index][idx],"start time": start_results[index][idx], "end time": end_results[index][idx], "pressure change time": pressure_change_times[index][idx], "volume": expt_info[3], "calculated volume": calc_volumes[total_index], "absolute error": abs_errors[total_index], "absolute error^2": abs_errors_squared[total_index],  "average pressure change time": csv_average_pressure_change_times[index][idx], "std. dev. change time": csv_standard_deviation_pressure_change_times[index][idx], "std. dev. volume" : csv_standard_deviation_volumes[index][idx], "Tank Fill Volume": expt_info[3], "local RMSD": local_rmsds[index][idx], "global RMSD": global_rmsd[total_index], "slope": slope[total_index], "intercept": intercept[total_index]}
 
                 df = pd.DataFrame(data= [inputs])
                 df_list.append(df)
@@ -245,3 +261,53 @@ def graphtec_analysis(path, dir, experiment_list, dictionary):
 
         df = pd.concat(df_list)
         df.to_csv(f"{parent_path}/{dir} Graphtec Python analysis experiment#{expt_num}.csv", index=False) # update file path for writing
+
+
+        analysis_path = os.path.join(parent_path, "Graphtec Python analysis")
+        isExist = os.path.exists(analysis_path)
+        if not isExist:
+            os.mkdir(analysis_path)
+
+        # plotting for calibration curve of fitted line using the average pressure change times of each volume measured (x-values) vs. the measured volume based on the scale mass reading (y-values)
+        fig, ax = plt.subplots()
+        ax.set_ylabel('Fill Volume (L)', loc='center')
+        ax.set_xlabel('Average Pressure Change Time (s)', loc='center')
+        plt.scatter(time_array, vol_array)
+        calc_fit = [calculated_volume(x) for x in average_pressure_change_times]
+        calc_array = np.array(calc_fit, dtype=np.float64)
+        ax.plot(time_array, calc_array, linestyle='dashed', label = f"volume = {rounding(time_volume_calibration.slope)}*time + {rounding(time_volume_calibration.intercept)}")
+        ax.legend(frameon=False)
+        plt.savefig(f"{analysis_path}/{dir} Graphtec calib curve experiment#{expt_num}.png")
+        # if you want to exercise direct control over the figure in terms of colors, axes, and so on, comment out the line above (highlight and Ctrl+/) and uncomment the line below (highlight+Ctrl+/)
+        # plt.show()
+
+        # plotting for error scatter plots that include local RMSD of each measured volume, global RMSD of all volume datapoints measured, standard deviations of each measured volume, and absolute errors of each individual datapoint
+        fig, ax = plt.subplots()
+        ax.set_ylabel('Error or deviation (L)', loc='center')
+        ax.set_xlabel('Fill Volume ("L")', loc='center')
+        volume_for_plot = [vol_array.min(), vol_array.max()]
+        volume_global_rmsd_line_array = np.array(volume_for_plot, dtype=np.float64)
+        global_rmsd_for_plot = [global_rmsd_value, global_rmsd_value]
+        global_rmsd_array = np.array(global_rmsd_for_plot, dtype=np.float64)
+        ind = np.argsort(vol_array)
+        vol_array = vol_array[ind]
+        local_rmsd_array = np.array(local_rmsds_for_plot, dtype=np.float64)
+        local_rmsd_array = local_rmsd_array[ind]
+        standard_deviation_volume_array = np.array(plot_standard_deviation_volumes, dtype=np.float64)
+        standard_deviation_volume_array = standard_deviation_volume_array[ind]
+        volume = [collected_volume_time_results[x][0] for x in range(0,len(collected_volume_time_results))]
+        volume_array = np.array(volume, dtype=np.float64)
+        abs_errors_array = np.array(abs_errors, dtype=np.float64)
+
+        ax.plot(vol_array, local_rmsd_array, '-o', label="local RMSD", color='tab:blue')
+        ax.plot(volume_global_rmsd_line_array, global_rmsd_array, '-o', label="global RMSD", color='tab:orange')
+        ax.plot(vol_array, standard_deviation_volume_array, '-o', label="standard deviation", color='tab:green')
+        ax.scatter(volume_array, abs_errors_array, label="absolute error of individual datapoints", color='darkred')
+
+
+        ax.legend(frameon=False)
+        plt.savefig(f"{analysis_path}/{dir} Graphtec error plot experiment#{expt_num}.png")
+        # if you want to exercise direct control over the figure in terms of colors, axes, and so on, comment out the line above (highlight and Ctrl+/) and uncomment the line below (highlight+Ctrl+/)
+        # plt.show()
+
+    print("Graphtec analysis complete.")

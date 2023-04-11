@@ -19,11 +19,11 @@ from mcculw.device_info import DaqDeviceInfo
  
 
 def tank_water_sequence(target_mass, first_experiment_params):
-    def check_params(key_string):
+    def check_params(key_string): # function that automatically checks that you set your keys and values correctly in your first experiment parameters
         if key_string not in params:
             raise Exception(f'{key_string} key is not in the experiment dictionary. Check the expt_list in the FDMG_system_controller program')
 
-    params = first_experiment_params
+    params = first_experiment_params # assign to params variable as first_experiment_params
     check_params("P_start")
     check_params("P_end")
     check_params("P_offset")
@@ -32,18 +32,16 @@ def tank_water_sequence(target_mass, first_experiment_params):
     check_params("P_delay")
 
 
-    transducer_conversion_factor = params["tank_transducer_range"]*7.5/30
+    transducer_conversion_factor = params["tank_transducer_range"]*7.5/30 # sets the multiplier and offset values to convert transducer voltage into pressure in psi; using a 250 ohm resistor
     
 
 
-    if params["P_end"] <=10:
-        cutoff = 5
-    else:
-        cutoff = 15
+    cutoff = 5 # pressure cutoff in psi used to control air valves during water filling or draining
+
     
     volume_offsets = [0, 0.05] # volume offsets in the case of the tank being filled for each step so the target range of each volume step is target_volume to target_volume + 0.05 L
-    if len(params["volumes"]) >2: 
-        if params["volumes"][1] > params["volumes"][2]: # determining if tank is being emptied for each volume after the first volume (supposed to be 0)
+    if len(params["volumes"]) >=2: 
+        if params["volumes"][0] > params["volumes"][1]: # determining if tank is being emptied for each volume after the first volume (supposed to be 0)
             volume_offsets = [-0.05, 0] # if water is drained for each volume step, change offset so the target range of each volume step is target_volume - 0.05 L to target_volume
 
 
@@ -67,34 +65,34 @@ def tank_water_sequence(target_mass, first_experiment_params):
     timelog = [" 1000 kg"] # starting/default value is set to 1000 kg, an improbably high value for the tank
     # timelog not currently in use, but can be implemented with a write to csv while loop, see around line 150 in experiment_sequence at close to the end of the expt_run function
 
-    def logger(string):
-        timelog.append(string)
-        return(timelog)
-
     # Sends instructions to pump in the form of a string encoded in ASCII format
 
     def direct1(string):
-        string = string + "\r\n"
+        string = string + "\r\n" #\r\n are carriage return and new line for python strings, respectively.
         ser1.write(string.encode('ascii'))
 
 
     def direct_log1(command): # logging the mass of the rate ran before and after sending the current rate on the pump using the PR V command and directing the pump rate
         direct1(command)
-        followup= str(ser1.read_until())
+        followup= str(ser1.read_until()) # returns the scale reading in this string format: "b'+ xxxx kg'" where xxxx is your scale mass value
         if (followup != "b''"):
             logger(followup)
         else:
             logger(" 1000 kg")
 
-    def float_convert():
+    def logger(string):
+        timelog.append(string)
+        return(timelog)
+
+    def float_convert(): # returns the last recorded scale mass reading as a decimal value
         return float(timelog[-1][timelog[-1].find(" "):timelog[-1].find(" kg")]) # remove the rest of the scale reading string and converts to a float value equal to mass in kg
 
     def pressure_measurement():
         board_num2 = 1 # board_num corresponding to the USB-TEMP-AI set up in Instacal
         channel = 0
         ai_range = ULRange.BIP5VOLTS
-        value = ul.v_in(board_num2, channel, ai_range)
-        return (value*transducer_conversion_factor)-transducer_conversion_factor
+        value = ul.v_in(board_num2, channel, ai_range) # reads voltage value for tank transducer
+        return (value*transducer_conversion_factor)-transducer_conversion_factor # returns converted voltage into pressure (psig)
 
 
     def air_fill(board_num, air_in_port, air_out_port):
@@ -161,8 +159,6 @@ def tank_water_sequence(target_mass, first_experiment_params):
         air_closed=False
         drain =False
 
-    # print(f"running on drain set to {str(drain)}")
-
     startProgram = (datetime.datetime.now())
     while not (target_mass + volume_offsets[0] <= float_convert() <= target_mass + volume_offsets[1]) : # self-correcting while loop that targets tank mass +/- 0.05 kg
         if not (float_convert() ==1000): # ensure that switching doesn't occur if the timelog[index] is the default value of 1000
@@ -209,7 +205,32 @@ def tank_water_sequence(target_mass, first_experiment_params):
         else:
             air_function(air_vent)
         value = pressure_measurement()
-
+    while not (target_mass + volume_offsets[0] <= float_convert() <= target_mass + volume_offsets[1]) : # self-correcting while loop that targets tank mass +/- 0.05 kg
+        if not (float_convert() ==1000): # ensure that switching doesn't occur if the timelog[index] is the default value of 1000
+            if target_mass + volume_offsets[1] < float_convert() and drain ==False: # switching logic if the tank mass above the target mass range 
+                water_function(water_drain)
+                drain = True
+                print(f"switching to drain set to {str(drain)}")
+            if target_mass + volume_offsets[0] > float_convert() and drain ==True: # switching logic if the tank mass is below the target mass range
+                water_function(water_fill)
+                drain =False
+                print(f"switching to drain set to {str(drain)}")
+        value = pressure_measurement()
+        # logic for opening/closing air valves during fill, this might need to be reworked to prevented air valves from opening/closing at too high of a frequency and increasing wear
+        if value<cutoff-0.5 and drain == False and air_closed == False:
+            air_closed=True
+            air_function(air_off)
+        if value > cutoff+0.5 and drain == False and air_closed == True:
+            air_closed =False
+            air_function(air_vent)
+        if value>cutoff +0.5 and drain == True and air_closed == False:
+            air_closed=True
+            air_function(air_off)
+        if value < cutoff-0.5 and drain == True and air_closed == True:
+            air_closed= False
+            air_function(air_fill)
+        direct_log1("N")
+    
     endProgram = (datetime.datetime.now())
     all_shutoff()
     if ((endProgram-startProgram).seconds>60): # verifying that pressure changes where no more than 1 minute, no need to equilibrate if no time was spent filling/venting air    
@@ -217,4 +238,9 @@ def tank_water_sequence(target_mass, first_experiment_params):
         time.sleep(300) # reset time for tank to account for adiabatic expansion that occurs as the air pressure change occurs during the water fill/drain
     while (float_convert()== 1000): #while loop to check that the tank mass reading is the actual mass and not the default value of 1000 kg
         direct_log1("N")
+    
+
     return(float_convert())
+
+# expt_list_template_vent = {"P_start": 25, "P_end": 24, "P_delay": 1, "count": 6, "pre": 60, "post": 0, "P_offset": 0.35, "tank_transducer_range": 30, "volumes": [70]}
+# tank_water_sequence(70,expt_list_template_vent)
