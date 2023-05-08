@@ -21,13 +21,13 @@ The central program also calls functions to analyze data from two data capture s
 These two analysis scripts each results in a .csv output with the relevant statistics (standard deviation, root-means-squared deviation, and absolute error). They both also output two linear plots as .png images, a calibration curve with a linear fit trendline and an error plot to assess the system in terms of measurement accuracy and precision. With the resulting plots shown below:</h3>
 
 <h3>pandas_data_analysis_automation_script_v3.py results:</h3>
-<img src="images\vent expt choked flow high pressure 03-27-23 USB-TEMP-AI calib curve experiment#1.png" alt="calibration curve plot from USB-TEMP-AI results" />
+<img src="/images/vent expt choked flow high pressure 03-27-23 USB-TEMP-AI calib curve experiment#1.png" alt="calibration curve plot from USB-TEMP-AI results" />
 <br></br>
-<img src="images\vent expt choked flow high pressure 03-27-23 USB-TEMP-AI error plot experiment#1.png" alt="error plot from USB-TEMP-AI results" />
+<img src="/images/vent expt choked flow high pressure 03-27-23 USB-TEMP-AI error plot experiment#1.png" alt="error plot from USB-TEMP-AI results" />
 <br></br>
 
 <h3>pandas_data_analysis_graphtec_script_post_auto_v2.py results:</h3>
-<img src="images\vent expt choked flow high pressure 03-27-23 Graphtec calib curve experiment#1.png" alt="calibration curve plot from graphtec results" />
+<img src="/images/vent expt choked flow high pressure 03-27-23 Graphtec calib curve experiment#1.png" alt="calibration curve plot from Graphtec results" />
 <br></br>
-<img src="images\vent expt choked flow high pressure 03-27-23 Graphtec error plot experiment#1.png" alt="error plot from graphtec results" />
+<img src="/images/vent expt choked flow high pressure 03-27-23 Graphtec error plot experiment#1.png" alt="error plot from Graphtec results" />
 <br></br>
