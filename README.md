@@ -33,4 +33,4 @@ Calibration curve plot of Water Fill Volume (y-axis) vs. average pressure change
 
 Error plot for manual DAQ system:
 
-<img src="https://github.com/jpabdou/NASA-lab-automation-and-data-analysis/blob/main/images/vent%20expt%20choked%20flow%20high%20pressure%2003-27-23%20USB-TEMP-AI%20error%20plot%20experiment%231.png" alt="error plot from Graphtec results" />
+<img src="https://raw.githubusercontent.com/jpabdou/NASA-lab-automation-and-data-analysis/main/images/vent%20expt%20choked%20flow%20high%20pressure%2003-27-23%20Graphtec%20error%20plot%20experiment%231.png" alt="error plot from Graphtec results" />
